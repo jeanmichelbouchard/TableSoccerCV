@@ -61,8 +61,8 @@ def calibrate_ball_color(ball_position):
 
         marked_image = image.copy()
         # draw the marker cross
-        cv2.line(marked_image, (x1, ball_position[1]), (x2, ball_position[1]), (0, 255, 255), 2)
-        cv2.line(marked_image, (ball_position[0], y1), (ball_position[0], y2), (0, 255, 255), 2)
+        cv2.line(marked_image, (x1, int(ball_position[1])), (x2, int(ball_position[1])), (0, 255, 255), 2)
+        cv2.line(marked_image, (int(ball_position[0]), y1), (int(ball_position[0]), y2), (0, 255, 255), 2)
 
         Interface.show_video(marked_image, GetSourceVar)
 
@@ -87,7 +87,7 @@ def calibrate_ball_color(ball_position):
 
     DetectBall.calibrate(image_crop)
 
-start = time.clock()# --- program start --- #
+start = time.process_time()# --- program start --- #
 Interface = UserInterfaces.PythonInterface()
 DetectBall = BallTracker.BallTracker(Interface)
 DetectField = FieldDetecter.FieldDetection()
@@ -153,4 +153,4 @@ while Interface.run():
     Interface.show_video(Image, GetSourceVar, Draw, )
     # DetectBall.Show() # for debugging
 
-print(time.clock() - start)
+print(time.process_time() - start)

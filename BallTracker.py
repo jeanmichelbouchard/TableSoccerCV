@@ -107,7 +107,7 @@ class BallTracker:
         mask = self._smooth_ball_mask(mask)
 
         # Find contours in the mask, at the moment only one contour is expected
-        im2, contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
         # For every contour found, the center is calculated (by averaging the
         # points), and the circe-comparison is done.

@@ -80,7 +80,7 @@ class FieldDetection:
                 center_circle = circle
 
         rgb = cv2.cvtColor(calibration_image, cv2.COLOR_HSV2RGB)
-        cv2.circle(rgb, (center_circle[0], center_circle[1]), center_circle[2], (0, 255, 0), 1)
+        cv2.circle(rgb, (int(center_circle[0]), int(center_circle[1])), int(center_circle[2]), (0, 255, 0), 1)
 
         center = center_circle[0], center_circle[1]
 

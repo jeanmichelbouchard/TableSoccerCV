@@ -51,7 +51,7 @@ class ImageSource:
 
             pass
         else:
-            self.cap = cv2.VideoCapture('video.avi')
+            self.cap = cv2.VideoCapture('1647562380_replay_short.h264')
 
     def start_grab(self):
 
