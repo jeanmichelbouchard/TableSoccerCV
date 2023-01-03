@@ -103,7 +103,7 @@ class GameplayAnalyser:
         self.ball_position = get_ball_var('ball_position')
 
         if self.ball_position != (-1, -1):
-            ratio_pxcm = get_field_var('ratio_pxcm')
+            ratio_pxcm = get_field_var('ratioPxCm')
             frame_time = get_source_var('FrameTime')
 
             if self.last_ball_position == 0:

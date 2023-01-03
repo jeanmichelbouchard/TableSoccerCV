@@ -14,10 +14,9 @@ import pypylon.pylon as py
 import time
 
 
-class ImageSource:
+class imageSource:
     """
-    Class for any image source. It can be a Video, but also a live image from
-    a camera
+    Class for any image source. It can be a Video, but also a live image from a camera.
     """
     
     live = 0
@@ -28,7 +27,7 @@ class ImageSource:
     frame_count = 0
     frame_rate = 0
 
-    def init(self):  # TODO: init or __init__?
+    def __init__(self):
         
         if (self.live == 1):
 
@@ -43,17 +42,17 @@ class ImageSource:
             )
 
             self.icam.Open()
-
-            
             self.icam.PixelFormat = "RGB8"
             self.icam.MaxNumBuffer = 50
             #self.icam.MaxNumBuffer = 2000
 
             pass
         else:
-            self.cap = cv2.VideoCapture('video.avi')
+            self.cap = cv2.VideoCapture('media/1647562380_replay_short.h264')
+            self.frame_width = int(self.cap.get(3)) 
+            self.frame_height = int(self.cap.get(4))
 
-    def start_grab(self):
+    def startGrab(self):
 
         if(self.live != 1):
 
@@ -68,7 +67,7 @@ class ImageSource:
             self.grab_status = False
             return False
 
-    def get_newest_frame(self):
+    def getNewestFrame(self):
 
 
         if self.live == 1:
@@ -89,16 +88,17 @@ class ImageSource:
                 ret, frame = self.cap.read()
  
                 self.frame_count = self.frame_count + 1
-                self.__calc_frametime(time.time())
+                self._calcFrametime(time.time())
                 
                 return cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                #return frame
             else:
                 print('gooaaaaa')
                 self.cap.release()
                 cv2.destroyAllWindows()
 
 
-    def new_image_available(self):
+    def newImageAvailable(self):
         """
 
         :return: Is there a new image to get?
@@ -106,7 +106,7 @@ class ImageSource:
         return True
         pass
 
-    def get_var(self, _type):
+    def getVar(self, _type):
 
         if 'frame_count' == _type:
             return self.frame_count
@@ -119,7 +119,7 @@ class ImageSource:
 
     last_timestamp = 0
 
-    def __calc_frametime(self, timestamp):
+    def _calcFrametime(self, timestamp):
 
         if 0 == self.last_timestamp:
             self.last_timestamp = timestamp

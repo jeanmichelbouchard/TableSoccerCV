@@ -67,7 +67,7 @@ class PythonInterface:
         else:
             return
 
-    start_session = {"key": 0, "text": "Start a sesstion"}
+    start_session = {"key": 0, "text": "Start a session"}
     start_calibration = {"key": 1, "text": "Start calibration"}
     start_match = {"key": 2, "text": "Start the match"}
 
