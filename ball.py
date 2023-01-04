@@ -38,10 +38,55 @@ class ball:
         
         return image
 
-    def calibrate(self, calibrationImage, ballPosition, ratioPxCm):
+    def calibrateMethod1(self, calibrationImage, ballPosition):
         """
-        Calibration routine.
         Measures the color of the ball and stores it in the class.
+        Calibration routine method 1 - Use colors similar to the color of the the pixel at the center of the image to create a mask.
+        :param calibrationImage: HSV-image to use for calculation.
+        :param ballPosition: Expected ball position in calibrationImage
+        :return: None
+        """
+        debugMode = 0
+
+        # The initialization is done with only a small part of the image around the ball position.
+        x1 = int(round(ballPosition[0] - calibrationImage.shape[1]/10, 0))
+        x2 = int(round(ballPosition[0] + calibrationImage.shape[1]/10, 0))
+        y1 = int(round(ballPosition[1] - calibrationImage.shape[0]/10, 0))
+        y2 = int(round(ballPosition[1] + calibrationImage.shape[0]/10, 0))
+        cropped = calibrationImage[y1:y2, x1:x2]
+        # Now the ball is at the center of the cropped image.
+        x_center = int(round(cropped.shape[1]/2))
+        y_center = int(round(cropped.shape[0]/2))
+
+        # Get the color of the pixel in the image center
+        color = calibrationImage[x_center, y_center]
+
+        # Create a mask for the areas with a color similar to the center pixel
+        lower_border_arr = color - [20, 20, 20]
+        upper_border_arr = color + [20, 20, 20]
+        lower_border = tuple(lower_border_arr.tolist())
+        upper_border = tuple(upper_border_arr.tolist())
+        mask = cv2.inRange(calibrationImage, lower_border, upper_border)
+
+        # Average the color values of the masked area
+        colors = cropped[mask == 255]
+        h_mean = int(round(np.mean(colors[:, 0])))
+        s_mean = int(round(np.mean(colors[:, 1])))
+        v_mean = int(round(np.mean(colors[:, 2])))
+
+        avg_color = [h_mean, s_mean, v_mean]
+
+        self.ball_color = avg_color
+
+        if debugMode:
+            print('Ball HSV color detected: ' + str(self.ball_color))
+            cv2.waitKey(0)
+
+    def calibrateMethod2(self, calibrationImage, ballPosition, ratioPxCm):
+        """
+        Measures the color of the ball and stores it in the class.
+        Calibration routine method 2 - Use HoughCircles to detect a circle in the image and average the colors inside that circle.
+        This method also allows to detect and store the radius of the ball, to be used in detectBallPosition method.
         :param calibrationImage: HSV-image to use for calculation.
         :param ballPosition: Expected ball position in calibrationImage
         :param ratioPxCm: Uses the ratio of pixel per cm to filter on the approximate expected ball size
@@ -54,28 +99,20 @@ class ball:
         x2 = int(round(ballPosition[0] + calibrationImage.shape[1]/10, 0))
         y1 = int(round(ballPosition[1] - calibrationImage.shape[0]/10, 0))
         y2 = int(round(ballPosition[1] + calibrationImage.shape[0]/10, 0))
-        # Now the ball is at the center of the cropped image.
-        image_crop = calibrationImage[y1:y2, x1:x2]
-        x_center = int(round(image_crop.shape[1]/2))
-        y_center = int(round(image_crop.shape[0]/2))
-
-        # Get the color of the pixel in the image center
-        color = calibrationImage[x_center, y_center]
+        cropped = calibrationImage[y1:y2, x1:x2]
+        # Now the ball is at the center of the cropped image (not used in this method).
 
         # Some preprocessing
-        rgb = cv2.cvtColor(image_crop, cv2.COLOR_HSV2RGB)
+        rgb = cv2.cvtColor(cropped, cv2.COLOR_HSV2RGB)
         gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 1)
-        if debugMode:
-            cv2.imshow("DetectBall.calibrate", blurred)
-            cv2.waitKey(0)
 
         # Detect circles with a size of a ball (radius from 1cm to 2.5cm)
         minRadius = int(1 * ratioPxCm)
         maxRadius = int(5 * ratioPxCm)
         circles = cv2.HoughCircles(blurred, cv2.HOUGH_GRADIENT, 1, maxRadius, param1=50, param2=30, minRadius=minRadius, maxRadius=maxRadius)
 
-        # Ensure only 1circle was found
+        # Ensure only 1 circle was found
         if circles is not None and circles.shape[0] == 1:
             # convert the (x, y) coordinates and radius of the circles to integers
             circles = np.round(circles[0, :]).astype("int")
@@ -83,36 +120,25 @@ class ball:
         else:
             raise Exception('Ball not detected correctly')
 
+        # Create mask with a filled circle
         mask = np.zeros(blurred.shape[:2], dtype="uint8")
-        # Reduce the radius the eliminate the noise around the ball
         cv2.circle(mask, (circle[0], circle[1]), int(circle[2]), 255, -1)
-#        cv2.circle(mask, (circle[0], circle[1]), int(circle[2]*0.8), 255, -1)
-        avg_color = cv2.mean(image_crop, mask=mask)[:3]
 
-        # Create a mask for the areas with a color similar to the center pixel
-#        lower_border_arr = color - [20, 20, 20]
-#        upper_border_arr = color + [20, 20, 20]
-#        lower_border = tuple(lower_border_arr.tolist())
-#        upper_border = tuple(upper_border_arr.tolist())
-#        mask = cv2.inRange(calibrationImage, lower_border, upper_border)
+        # Get average color in mask
+        avg_color = cv2.mean(cropped, mask=mask)[:3]
 
-        # Average the color values of the masked area
-#        colors = image_crop[masked == 255]
-#        h_mean = int(round(np.mean(colors[:, 0])))
-#        s_mean = int(round(np.mean(colors[:, 1])))
-#        v_mean = int(round(np.mean(colors[:, 2])))
-
-#        av = [h_mean, s_mean, v_mean]
-#        self.ball_color = tuple(av)
         self.ball_color = avg_color
         self.ball_radius = circle[2]
 
         if debugMode:
             print('Ball HSV color detected: ' + str(self.ball_color))
             print('Ball radius detected (cm): ' + str(self.ball_radius/ratioPxCm))
+            # Draw green circle around detected ball
+            cv2.circle(rgb, (circle[0], circle[1]), int(circle[2]), (0,255,0), 1)
+            cv2.imshow("rgb", rgb)
             cv2.waitKey(0)
 
-    def detectBallPosition(self, img_hsv):
+    def detectBallPositionMethod1(self, img_hsv):
         """
         Finds the ball in the image.
 
@@ -130,9 +156,8 @@ class ball:
         :param img_hsv: HSV-image to find the ball on
         :return: None
         """
-        # TODO: also include the expected ball size into the decision
-
         debugMode = 1
+
         x_mean = []
         y_mean = []
         dist = []
@@ -148,7 +173,6 @@ class ball:
         lower_color[lower_color > 255] = 255
         upper_color[upper_color < 0] = 0
         upper_color[upper_color > 255] = 255
-#        print((lower_color,upper_color))
 #        smoothMask = cv2.erode(mask, None, iterations=2)
 #        smoothMask = cv2.dilate(smoothMask, None, iterations=2)
         rgb = cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB)
@@ -174,6 +198,7 @@ class ball:
             x_mean.append(int(np.round(np.mean(element[:,0]))))
             y_mean.append(int(np.round(np.mean(element[:,1]))))
             element_ctr += 1
+            # Debug: print contours one by one to find which one is the ball
 #            cv2.drawContours(rgb, [element], 0, (0,255,0), 1)
 #            print(element_ctr)
 #            cv2.waitKey(0)
@@ -197,13 +222,12 @@ class ball:
             # Otherwise the element with the best similarity to a circle is chosen
             # to be considered as the ball.
             self.curr_ball_position = (x_mean[np.argmin(dist)], y_mean[np.argmin(dist)])
-#            if debugMode:
-#                print(self.curr_ball_position)
-#                self._drawMarkerCross(img_hsv, self.curr_ball_position)
-#                cv2.imshow("detectBallPosition:mask", img_hsv)
-#                cv2.waitKey(0)
 
         if debugMode:
+#           print(self.curr_ball_position)
+#           self._drawMarkerCross(img_hsv, self.curr_ball_position)
+#           cv2.imshow("detectBallPosition:mask", img_hsv)
+#           print((lower_color,upper_color))
             cv2.imshow("edges", edges)
 #            cv2.imshow("blurred", blurred)
 #            cv2.imshow("img_hsv", img_hsv)

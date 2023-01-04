@@ -30,7 +30,7 @@ while imageSource.newImageAvailable():
         frameCount = frameCount + 1
     except(cv2.error):
         break
-    
+
     ball.detectBallPosition(frame)
 
     key = cv2.waitKey(0)
