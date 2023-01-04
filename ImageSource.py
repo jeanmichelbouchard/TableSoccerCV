@@ -130,4 +130,4 @@ class imageSource:
             self.frame_rate = 1 / period
             self.frametime = period
 
-            print(self.frame_rate)
+            # print(self.frame_rate)

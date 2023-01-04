@@ -23,9 +23,9 @@ Throughout this program, the HSV representation of images will be used.
 """
 
 
-import ball
-import field
-import imageSource
+import BallTracker
+import FieldDetecter
+import ImageSource
 import GameplayAnalyser
 import UserInterfaces
 
@@ -52,7 +52,8 @@ def calibrate_ball_color(ball_position):
     # needed to get the size of the camera images
     while time.time() < t_end or not _done:
 
-        image = Camera.getNewestFrame()
+        image = Camera.get_newest_frame()
+
         x1 = int(round(ball_position[0] - image.shape[1]/20, 0))
         x2 = int(round(ball_position[0] + image.shape[1]/20, 0))
         y1 = int(round(ball_position[1] - image.shape[0]/20, 0))
@@ -68,77 +69,88 @@ def calibrate_ball_color(ball_position):
         _done = 1
 
     # calibration_image = Camera.get_newest_frame()
-    calibration_image = cv2.cvtColor(cv2.imread(r'./BallCalibrationJM.PNG'), cv2.COLOR_BGR2HSV)
+    calibration_image = cv2.cvtColor(cv2.imread(r'./BallCalibration.PNG'), cv2.COLOR_BGR2HSV)
     calibration_image = cv2.resize(calibration_image, (image.shape[1], image.shape[0]))
 
-    ball.calibrate(image_crop)
+    # The initialization is done with only a small part of the image around the center spot.
+    x1 = int(round(ball_position[0] - calibration_image.shape[1]/10, 0))
+    x2 = int(round(ball_position[0] + calibration_image.shape[1]/10, 0))
+    y1 = int(round(ball_position[1] - calibration_image.shape[0]/10, 0))
+    y2 = int(round(ball_position[1] + calibration_image.shape[0]/10, 0))
 
-#start = time.process_time() # --- program start --- #
+    image_crop = calibration_image[y1:y2, x1:x2]
 
-# Initialize variables
+    # calibration_image = cv2.line(calibration_image,(x1,ball_position[1]),(x2,ball_position[1]),(0,255,255),2)
+    # calibration_image = cv2.line(calibration_image,(ball_position[0],y1),(ball_position[0],y2),(0,255,255),2)
+    # plt.imshow(cv2.cvtColor(calibration_image, cv2.COLOR_HSV2RGB))
+    # plt.show()
+
+    DetectBall.calibrate(image_crop)
+
+start = time.process_time()# --- program start --- #
 Interface = UserInterfaces.PythonInterface()
-ball = ball.BallTracker(Interface)
-DetectField = field.field()
-Camera = imageSource.imageSource()
+DetectBall = BallTracker.BallTracker(Interface)
+DetectField = FieldDetecter.FieldDetection()
+Camera = ImageSource.ImageSource()
 Match = GameplayAnalyser.GameplayAnalyser()
 
-Draw = [DetectField.draw, ball.draw, Match.draw]
+Draw = [DetectField.draw, DetectBall.draw, Match.draw]
 
-GetSourceVar = Camera.getVar
-GetFieldVar = DetectField.getVar
-GetBallVar = ball.get_var
-#GetMatchVar = Match.get_var
+GetSourceVar = Camera.get_var
+GetFieldVar = DetectField.get_var
+GetBallVar = DetectBall.get_var
+GetMatchVar = Match.get_var
+
 
 #  --- initialization --- #
-#while not Interface.wait_for_user_command(Interface.start_session): #Ne fais rien actuellement
-#    pass
+while not Interface.wait_for_user_command(Interface.start_session):
+    pass
 
-#Interface.message("Session started")
+Interface.message("Session started")
 
-Camera.startGrab()
-#while not Camera.newImageAvailable():
-#    pass
-CalibrationImage = Camera.getNewestFrame()
+Camera.init()
+Camera.start_grab()
+while not Camera.new_image_available():
+    pass
+CalibrationImage = Camera.get_newest_frame()
 
 # detection of the field
-DetectField.calibrate(CalibrationImage)
+DetectField.get_angle(CalibrationImage)
+DetectField.get_center_scale(CalibrationImage)
+Field = DetectField.calc_field()
+DetectField.calc_goal_area()
 # Match.SetField(field)
 
-#calibrate_ball_color(DetectField.center)
-image = Camera.getNewestFrame()
-cv2.imshow("Before detect ball", image)
-ball.calibrate(cv2.cvtColor(cv2.imread(r'./BallCalibrationJM.PNG'), cv2.COLOR_BGR2HSV), DetectField.center, DetectField.ratioPxCm)
-ball.detect_ball_position(image)
+calibrate_ball_color(GetFieldVar('center'))
 
-#Interface.message("Calibration succeeded")
+Interface.message("Calibration succeeded")
 
 # --- match processing --- #
-#Interface.wait_for_user_command(Interface.start_match)
+Interface.wait_for_user_command(Interface.start_match)
 
-#while Interface.run():
-#    if not Camera.newImageAvailable():
-#        continue
+while Interface.run():
+    if not Camera.new_image_available():
+        continue
 
-#    try:
-#        Image = Camera.getNewestFrame()
-#    except(cv2.error):
-#        break
+    try:
+        Image = Camera.get_newest_frame()
+    except(cv2.error):
+        break
     
-#    DetectBall.detect_ball_position(Image)
-#    _ = cv2.waitKey(0)
+    DetectBall.detect_ball_position(Image)
 
-#    GoalStatus = Match.check_for_goal(GetBallVar, GetFieldVar)
-#    if GoalStatus is not False:
-#        Match.count_score(GoalStatus)
+    GoalStatus = Match.check_for_goal(GetBallVar, GetFieldVar)
+    if GoalStatus is not False:
+        Match.count_score(GoalStatus)
 
-#    Match.calc_ball_speed_average(GetSourceVar, GetBallVar, GetFieldVar, 10)
+    Match.calc_ball_speed_average(GetSourceVar, GetBallVar, GetFieldVar, 10)
 
-#    Match.heatmap(GetBallVar)
+    Match.heatmap(GetBallVar)
 
     # if(MatchMessage != "none"):
     #   Interface.Message(MatchMessage)
 
-#    Interface.show_video(Image, GetSourceVar, Draw, )
+    Interface.show_video(Image, GetSourceVar, Draw, )
     # DetectBall.Show() # for debugging
 
-#print(time.process_time() - start)
+print(time.process_time() - start)
