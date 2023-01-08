@@ -27,8 +27,10 @@ class imageSource:
     frame_count = 0
     frame_rate = 0
 
-    def __init__(self):
+    def __init__(self, live, videoPath):
         
+        self.live = live
+
         if (self.live == 1):
 
             self.icam = py.InstantCamera(py.TlFactory.GetInstance().CreateFirstDevice())
@@ -48,7 +50,7 @@ class imageSource:
 
             pass
         else:
-            self.cap = cv2.VideoCapture('media/1647562380_replay_short.h264')
+            self.cap = cv2.VideoCapture(videoPath)
             self.frame_width = int(self.cap.get(3)) 
             self.frame_height = int(self.cap.get(4))
 
@@ -90,7 +92,7 @@ class imageSource:
                 self.frame_count = self.frame_count + 1
                 self._calcFrametime(time.time())
                 
-                return cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+                return cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
                 #return frame
             else:
                 print('gooaaaaa')

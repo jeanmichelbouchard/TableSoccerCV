@@ -37,6 +37,27 @@ class field:
         self._calcField()
         self._calcGoalArea()
 
+    def inField(self, position):
+        """
+        :param position: Coordinates of a point
+        :return: True if the position is inside the field, False otherwise
+        """
+        debugMode = 0
+
+        # Field has not been calibrated yet
+        if self.field == 0:
+            return False
+
+        topLeft = self.field[0]
+        bottomRight = self.field[2]
+    
+        if (topLeft[0] <= position[0] <= bottomRight[0] and topLeft[1] <= position[1] <= bottomRight[1]) :
+            return True
+        else :
+            if debugMode:
+                print(str(position) + " is not between" + str(topLeft) + "and " + str(bottomRight))
+            return False
+
     def draw(self, image):
         """
         Draws the field borders and markers onto the image.

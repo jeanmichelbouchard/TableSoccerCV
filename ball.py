@@ -46,7 +46,7 @@ class ball:
         :param ballPosition: Expected ball position in calibrationImage
         :return: None
         """
-        debugMode = 0
+        verbose = 0
 
         # The initialization is done with only a small part of the image around the ball position.
         x1 = int(round(ballPosition[0] - calibrationImage.shape[1]/10, 0))
@@ -78,11 +78,11 @@ class ball:
 
         self.ball_color = avg_color
 
-        if debugMode:
+        if verbose:
             print('Ball HSV color detected: ' + str(self.ball_color))
             cv2.waitKey(0)
 
-    def calibrateMethod2(self, calibrationImage, ballPosition, ratioPxCm):
+    def calibrateMethod2(self, calibrationImage, ballPosition, ratioPxCm, verbose = 0):
         """
         Measures the color of the ball and stores it in the class.
         Calibration routine method 2 - Use HoughCircles to detect a circle in the image and average the colors inside that circle.
@@ -92,7 +92,6 @@ class ball:
         :param ratioPxCm: Uses the ratio of pixel per cm to filter on the approximate expected ball size
         :return: None
         """
-        debugMode = 0
 
         # The initialization is done with only a small part of the image around the ball position.
         x1 = int(round(ballPosition[0] - calibrationImage.shape[1]/10, 0))
@@ -130,7 +129,7 @@ class ball:
         self.ball_color = avg_color
         self.ball_radius = circle[2]
 
-        if debugMode:
+        if verbose:
             print('Ball HSV color detected: ' + str(self.ball_color))
             print('Ball radius detected (cm): ' + str(self.ball_radius/ratioPxCm))
             # Draw green circle around detected ball
@@ -138,31 +137,153 @@ class ball:
             cv2.imshow("rgb", rgb)
             cv2.waitKey(0)
 
-    """ detectBallPositionMethods
-    Finds the ball in the image.
-
-    The algorithm is based on the ball color and does not use edge
-    recognition to find the ball. As long as the ball color differs from
-    the other colors in the image, it works well and is a safe way to find the ball. 
-    -- my problem is that the ball color does not differ from other colors in the image --
-
-    First, the image is searched for pixels with similar color to the ball
-    color creatinga mask. The mask should contain a white point (the ball).
-    To ensure that the ball is found, the contours of the mask are found.
-    If there are more than one element with contours, a simple
-    circle-similarity measure is calculated.
-    The element with the highest similarity to a circle is considered as the ball.
-
-    :param img_hsv: HSV-image to find the ball on
-    :return: None
-    """
-
-    def detectBallPositionMethod1(self, img_hsv):
+    def findMethod0(self, img_hsv, verbose = 0):
         """
+        Finds the ball in the image.
+        The algorithm is based on the ball color and does not use edge
+        recognition to find the ball. As long as the ball color differs from
+        the other colors in the image, it works well and is a safe way to find the ball. 
+        -- my problem is that the ball color does not differ from other colors in the image --
+
+        First, the image is searched for pixels with similar color to the ball
+        color creating a mask. The mask should contain a white point (the ball).
+        To ensure that the ball is found, the contours of the mask are found.
+        If there are more than one element with contours, a simple
+        circle-similarity measure is calculated.
+        The element with the highest similarity to a circle is considered as the ball.
+
         :param img_hsv: HSV-image to find the ball on
         :return: None
         """
-        debugMode = 1
+
+        x_mean = []
+        y_mean = []
+        dist = []
+        self.curr_ball_position = (0, 0)
+
+        # Get the areas of the image, which have a similar color to the ball color
+        bl_temp=cv2.getTrackbarPos('bl', 'temp')
+        gl_temp=cv2.getTrackbarPos('gl', 'temp')
+        rl_temp=cv2.getTrackbarPos('rl', 'temp')
+
+        bh_temp=cv2.getTrackbarPos('bh', 'temp')
+        gh_temp=cv2.getTrackbarPos('gh', 'temp')
+        rh_temp=cv2.getTrackbarPos('rh', 'temp')
+
+        mask=cv2.inRange(img_hsv,(bl_temp,gl_temp,rl_temp),(bh_temp,gh_temp,rh_temp))
+        smoothMask = self._smooth_ball_mask(mask)
+
+        # Find contours in the mask, at the moment only one contour is expected
+        contours, hierarchy = cv2.findContours(smoothMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+
+        # For every contour found, the center is calculated (by averaging the
+        # points), and the circle-comparison is done.
+        contour_cnt = 0
+        for contour in contours:
+            contour = contour[:,0,:]
+            x_mean.append(int(np.round(np.mean(contour[:,0]))))
+            y_mean.append(int(np.round(np.mean(contour[:,1]))))
+            contour_cnt += 1
+
+            dist.append(self._check_circle(contour))
+
+        if contour_cnt <= 0 or min(dist) > self.ball_detection_threshold:
+            # If there is nothing found or it does not look like a circle, it is
+            # assumed that there is no ball in the image.
+            self.curr_ball_position = (-1, -1)
+            print("No ball detected")  # TODO: give that message to the interface
+        else:
+            # Otherwise the contour with the best similarity to a circle is chosen
+            # to be considered as the ball.
+            self.curr_ball_position = (x_mean[np.argmin(dist)], y_mean[np.argmin(dist)])
+
+        self._store_ball_position(self.curr_ball_position)
+
+        if verbose:
+            print("Detected ball position: " + str(self.curr_ball_position))
+            self._drawMarkerCross(img_hsv, self.curr_ball_position)
+            cv2.imshow("img_hsv", img_hsv)
+            cv2.imshow("mask", mask)
+            cv2.imshow("smoothMask", smoothMask)
+
+    def findMethod1(self, img_hsv):
+        """
+        Finds the ball in the image.
+        The algorithm is based on the ball color and does not use edge
+        recognition to find the ball. As long as the ball color differs from
+        the other colors in the image, it works well and is a safe way to find the ball. 
+        -- my problem is that the ball color does not differ from other colors in the image --
+
+        First, the image is searched for pixels with similar color to the ball
+        color creating a mask. The mask should contain a white point (the ball).
+        To ensure that the ball is found, the contours of the mask are found.
+        If there are more than one element with contours, a simple
+        circle-similarity measure is calculated.
+        The element with the highest similarity to a circle is considered as the ball.
+
+        :param img_hsv: HSV-image to find the ball on
+        :return: None
+        """
+        verbose = 1
+
+        x_mean = []
+        y_mean = []
+        dist = []
+        self.curr_ball_position = (0, 0)
+
+        # Get the areas of the image, which have a similar color to the ball color
+        lower_color = np.asarray(self.ball_color)
+        upper_color = np.asarray(self.ball_color)
+        lower_color = lower_color - [50, 50, 50]  # good values (for test video are 10,50,50)
+        upper_color = upper_color + [50, 255, 255]  # good values (for test video are 10,50,50)
+        lower_color[lower_color < 0] = 0
+        lower_color[lower_color > 255] = 255
+        upper_color[upper_color < 0] = 0
+        upper_color[upper_color > 255] = 255
+
+        mask = cv2.inRange(img_hsv, lower_color, upper_color)
+        smoothMask = self._smooth_ball_mask(mask)
+
+        # Find contours in the mask, at the moment only one contour is expected
+        contours, hierarchy = cv2.findContours(smoothMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+
+        # For every contour found, the center is calculated (by averaging the
+        # points), and the circle-comparison is done.
+        contour_cnt = 0
+        for contour in contours:
+            contour = contour[:,0,:]
+            x_mean.append(int(np.round(np.mean(contour[:,0]))))
+            y_mean.append(int(np.round(np.mean(contour[:,1]))))
+            contour_cnt += 1
+
+            dist.append(self._check_circle(contour))
+
+        if contour_cnt <= 0 or min(dist) > self.ball_detection_threshold:
+            # If there is nothing found or it does not look like a circle, it is
+            # assumed that there is no ball in the image.
+            self.curr_ball_position = (-1, -1)
+            print("No ball detected")  # TODO: give that message to the interface
+        else:
+            # Otherwise the contour with the best similarity to a circle is chosen
+            # to be considered as the ball.
+            self.curr_ball_position = (x_mean[np.argmin(dist)], y_mean[np.argmin(dist)])
+
+        self._store_ball_position(self.curr_ball_position)
+
+        if verbose:
+            print("Detected ball position: " + str(self.curr_ball_position))
+            self._drawMarkerCross(img_hsv, self.curr_ball_position)
+            cv2.imshow("img_hsv", img_hsv)
+
+    def findMethod2(self, img_hsv):
+        """
+        Finds the ball in the image.
+        The element with the highest similarity to a circle near ball radius is considered as the ball.
+
+        :param img_hsv: HSV-image to find the ball on
+        :return: None
+        """
+        verbose = 1
 
         x_mean = []
         y_mean = []
@@ -179,45 +300,38 @@ class ball:
         lower_color[lower_color > 255] = 255
         upper_color[upper_color < 0] = 0
         upper_color[upper_color > 255] = 255
-        rgb = cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB)
-#        blurred = cv2.GaussianBlur(img_hsv, (5, 5), 1)
-        mask = cv2.inRange(img_hsv, lower_color, upper_color)
-#        gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
-#        smoothMask = self._smooth_ball_mask(edges)
 
-        fieldNoBall = cv2.cvtColor(cv2.imread(r'./media/foosballFieldNoBall.png'), cv2.COLOR_BGR2HSV)
-        fieldNoBall = cv2.resize(fieldNoBall, (mask.shape[1], mask.shape[0]))
-        maskNoBall = cv2.inRange(fieldNoBall, lower_color, upper_color)
-        xor = cv2.bitwise_xor(mask, maskNoBall)
-        edges = cv2.Canny(xor, 50, 150, apertureSize=3)
+        rgb = cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB)
+        mask = cv2.inRange(img_hsv, lower_color, upper_color)
+        smoothMask = self._smooth_ball_mask(mask)
 
         # Find contours in the mask, at the moment only one contour is expected
-        contours, hierarchy = cv2.findContours(xor, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+        contours, hierarchy = cv2.findContours(smoothMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
         # For every contour found, the center is calculated (by averaging the
         # points), and the circle-comparison is done.
-        element_ctr = 0
-        for element in contours:
-            element = element[:,0,:]
-            x_mean.append(int(np.round(np.mean(element[:,0]))))
-            y_mean.append(int(np.round(np.mean(element[:,1]))))
-            element_ctr += 1
+        contour_cnt = 0
+        for contour in contours:
+            contour = contour[:,0,:]
+            x_mean.append(int(np.round(np.mean(contour[:,0]))))
+            y_mean.append(int(np.round(np.mean(contour[:,1]))))
+            contour_cnt += 1
             # Debug: print contours one by one to find which one is the ball
-#            cv2.drawContours(rgb, [element], 0, (0,255,0), 1)
-#            print(element_ctr)
+#            cv2.drawContours(rgb, [contour], 0, (0,255,0), 1)
+#            print(contour_cnt)
 #            cv2.waitKey(0)
-            dist.append(self._check_circle(element))
+            dist.append(self._check_circle(contour))
 
-            if self._isCircle(element):
+            if self._isCircle(contour):
 #                print("Found circle")
-                ((x, y), radius) = cv2.minEnclosingCircle(element)
+                ((x, y), radius) = cv2.minEnclosingCircle(contour)
                 if self.ball_radius * ballRadiusTolerance <= radius <= self.ball_radius * (ballRadiusTolerance + 1):
 #                    print("Found ball")
                     cv2.circle(rgb, (int(x), int(y)), int(radius), (0,255,255), 1)
                 else:
                     cv2.circle(rgb, (int(x), int(y)), int(radius), (255,0,255), 1)
 
-        if element_ctr <= 0 or min(dist) > self.ball_detection_threshold:
+        if contour_cnt <= 0 or min(dist) > self.ball_detection_threshold:
             # If there is nothin found or it does not look like a circle, it is
             # assumed that there is no ball in the image.
             self.curr_ball_position = (-1, -1)
@@ -227,24 +341,104 @@ class ball:
             # to be considered as the ball.
             self.curr_ball_position = (x_mean[np.argmin(dist)], y_mean[np.argmin(dist)])
 
-        if debugMode:
+        if verbose:
 #           print(self.curr_ball_position)
-#           self._drawMarkerCross(img_hsv, self.curr_ball_position)
+            self._drawMarkerCross(img_hsv, self.curr_ball_position)
 #           cv2.imshow("detectBallPosition:mask", img_hsv)
 #           print((lower_color,upper_color))
-            cv2.imshow("edges", edges)
 #            cv2.imshow("blurred", blurred)
-#            cv2.imshow("img_hsv", img_hsv)
+            cv2.imshow("img_hsv", img_hsv)
             cv2.imshow("mask", mask)
-            cv2.imshow("maskNoBall", maskNoBall)
-            cv2.imshow("xor", xor)
             cv2.imshow("rgb", rgb)
 #            cv2.imshow("detectBallPosition:smoothMask", smoothMask)
 
         self._store_ball_position(self.curr_ball_position)
 
-    def detectBallPositionMethod2(self, img_hsv):
-        debugMode = 1
+    def findMethod20(self, field, img_hsv, verbose = 0):
+        """
+        Finds the ball in the image.
+        The element with the highest similarity to a circle near ball radius is considered as the ball.
+
+        :param img_hsv: HSV-image to find the ball on
+        :return: None
+        """
+
+        x_mean = []
+        y_mean = []
+        dist = []
+        self.curr_ball_position = (0, 0)
+
+        # Get the areas of the image, which have a similar color to the ball color
+        Hl=cv2.getTrackbarPos('Hl', 'temp')
+        Sl=cv2.getTrackbarPos('Sl', 'temp')
+        Vl=cv2.getTrackbarPos('Vl', 'temp')
+
+        Hh=cv2.getTrackbarPos('Hh', 'temp')
+        Sh=cv2.getTrackbarPos('Sh', 'temp')
+        Vh=cv2.getTrackbarPos('Vh', 'temp')
+
+        ballRadiusTolerance = 0.25 * cv2.getTrackbarPos('Radius', 'temp')
+
+        mask=cv2.inRange(img_hsv,(Hl,Sl,Vl),(Hh,Sh,Vh))
+        smoothMask = self._smooth_ball_mask(mask)
+
+        # Find contours in the mask, at the moment only one contour is expected
+        contours, hierarchy = cv2.findContours(smoothMask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+
+        # For every contour found, the center is calculated (by averaging the
+        # points), and the circle-comparison is done.
+        contour_cnt = 0
+        for contour in contours:
+            contour = contour[:,0,:]
+            contour_cnt += 1
+
+            if self._isCircle(contour):
+                # print("Found circle")
+                ((x, y), radius) = cv2.minEnclosingCircle(contour)
+                if self.ball_radius * ballRadiusTolerance <= radius <= self.ball_radius * (ballRadiusTolerance + 1) and field.inField((int(x), int(y))):
+                    # print("Found ball in field")
+                    cv2.circle(img_hsv, (int(x), int(y)), int(radius), (0,255,255), 1)
+                    # Criterias : 
+                    # - Radius similar to expected - min(radius_expected - radius_observed)
+                    # - Closeness to circle shape - min(self._check_circle(contour)) --- not used for now
+                    x_mean.append(int(x))
+                    y_mean.append(int(y))
+                    dist.append(self.ball_radius - radius)
+
+        if contour_cnt == 0 or len(dist) == 0:
+            self.curr_ball_position = (-1, -1)
+            print("No ball detected")  # TODO: give that message to the interface
+        else:
+            # Otherwise the element with the best similarity to the ball is chosen
+            self.curr_ball_position = (x_mean[np.argmin(dist)], y_mean[np.argmin(dist)])
+
+        if verbose:
+            print(str(len(dist)) + " candidate balls detected in image. Coordinates of choosen as the ball: " + str(self.curr_ball_position))
+            cv2.imshow("img_hsv", cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB))
+            cv2.imshow("mask", mask)
+            cv2.imshow("smoothMask", smoothMask)
+
+        self._store_ball_position(self.curr_ball_position)
+
+    def detectBallPositionMethod3(self, img_hsv):
+        """
+        Finds the ball in the image.
+        The algorithm is based on the ball color and does not use edge
+        recognition to find the ball. As long as the ball color differs from
+        the other colors in the image, it works well and is a safe way to find the ball. 
+        -- my problem is that the ball color does not differ from other colors in the image --
+
+        First, the image is searched for pixels with similar color to the ball
+        color creating a mask. The mask should contain a white point (the ball).
+        To ensure that the ball is found, the contours of the mask are found.
+        If there are more than one element with contours, a simple
+        circle-similarity measure is calculated.
+        The element with the highest similarity to a circle is considered as the ball.
+
+        :param img_hsv: HSV-image to find the ball on
+        :return: None
+        """
+        verbose = 1
 
         x_mean = []
         y_mean = []
@@ -311,7 +505,7 @@ class ball:
             # to be considered as the ball.
             self.curr_ball_position = (x_mean[np.argmin(dist)], y_mean[np.argmin(dist)])
 
-        if debugMode:
+        if verbose:
 #           print(self.curr_ball_position)
 #           self._drawMarkerCross(img_hsv, self.curr_ball_position)
 #           cv2.imshow("detectBallPosition:mask", img_hsv)
@@ -367,7 +561,11 @@ class ball:
         :param points: Contour to compare to a circle
         :return: True if contour resembles a circle, false otherwise
         """
-        if self._check_circle(points) <= self.ball_detection_threshold:
+
+        circleMatchingThreshold = 0.1 * cv2.getTrackbarPos('Circle', 'temp')
+
+#        if self._check_circle(points) <= self.ball_detection_threshold:
+        if self._check_circle(points) <= circleMatchingThreshold:
             return True
         else:
             return False
