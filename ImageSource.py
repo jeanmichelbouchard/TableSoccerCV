@@ -53,6 +53,7 @@ class imageSource:
             self.cap = cv2.VideoCapture(videoPath)
             self.frame_width = int(self.cap.get(3)) 
             self.frame_height = int(self.cap.get(4))
+            print("FPS: " + str(self.cap.get(cv2.CAP_PROP_FPS)))
 
     def startGrab(self):
 
@@ -92,8 +93,8 @@ class imageSource:
                 self.frame_count = self.frame_count + 1
                 self._calcFrametime(time.time())
                 
-                return cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
-                #return frame
+                #return cv2.cvtColor(frame, cv2.COLOR_RGB2HSV)
+                return frame
             else:
                 print('gooaaaaa')
                 self.cap.release()
@@ -132,4 +133,4 @@ class imageSource:
             self.frame_rate = 1 / period
             self.frametime = period
 
-            # print(self.frame_rate)
+            print("Detected frame rate: " + str(self.frame_rate))

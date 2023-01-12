@@ -8,41 +8,45 @@ import field
 import ball
 import UserInterfaces
 
+# Create parameter tuning window
+def nothing(x):
+    pass
+
+cv2.namedWindow('Parameters', cv2.WINDOW_NORMAL)
+cv2.createTrackbar('Hl', 'Parameters', 101, 255, nothing)
+cv2.createTrackbar('Sl', 'Parameters', 88, 255, nothing)
+cv2.createTrackbar('Vl', 'Parameters', 0, 255, nothing)
+cv2.createTrackbar('Hh', 'Parameters', 116, 255, nothing)
+cv2.createTrackbar('Sh', 'Parameters', 158, 255, nothing)
+cv2.createTrackbar('Vh', 'Parameters', 109, 255, nothing)
+cv2.createTrackbar('Radius', 'Parameters', 2, 10, nothing)
+cv2.createTrackbar('Circle', 'Parameters', 2, 10, nothing)
+
 # Initialize variables
-imageSource = imageSource.imageSource(False, 'media/1673126962_replay_short.h264') # Balle liège
+#imageSource = imageSource.imageSource(False, 'media/1673126962_replay_short.h264') # Balle liège
+imageSource = imageSource.imageSource(False, 'media/90fps.h264')
+
 field = field.field()
 ball = ball.ball()
 
 fieldCalibrationImage = imageSource.getNewestFrame()
 
-# detection of the field
-field.calibrate(fieldCalibrationImage)
+# detection of the field borders
+field.calibrate(fieldCalibrationImage, verbose=1)
 
 ballCalibrationImage = cv2.cvtColor(cv2.imread(r'./media/BallCalibration_liege.PNG'), cv2.COLOR_RGB2HSV)
 ballCalibrationImage = cv2.resize(ballCalibrationImage, (fieldCalibrationImage.shape[1], fieldCalibrationImage.shape[0]))
-ball.calibrateMethod2(ballCalibrationImage, field.center, field.ratioPxCm, verbose=1)
-
-def nothing(x):
-    pass
-
-cv2.namedWindow('temp')
-cv2.createTrackbar('Hl', 'temp', 101, 255, nothing)
-cv2.createTrackbar('Sl', 'temp', 88, 255, nothing)
-cv2.createTrackbar('Vl', 'temp', 0, 255, nothing)
-cv2.createTrackbar('Hh', 'temp', 116, 255, nothing)
-cv2.createTrackbar('Sh', 'temp', 158, 255, nothing)
-cv2.createTrackbar('Vh', 'temp', 109, 255, nothing)
-cv2.createTrackbar('Radius', 'temp', 2, 10, nothing)
-cv2.createTrackbar('Circle', 'temp', 2, 10, nothing)
+ball.calibrateMethod2(ballCalibrationImage, field.center, field.ratioPxCm, verbose=0)
 
 frameCount = 0
 frame = imageSource.getNewestFrame()
 
 while imageSource.newImageAvailable():
 
-#    ball.findMethod0(frame.copy())
-    ball.findMethod20(field, frame.copy(), verbose=1)
-#    img = field.draw(frame.copy())
+    ball.findMethod20(field, frame, verbose=1)
+    markedFrame = field.draw(frame)
+    markedFrame = ball.draw(markedFrame)
+    cv2.imshow("Frame", markedFrame)
 
     key = cv2.waitKeyEx(0)
 

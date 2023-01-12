@@ -23,17 +23,17 @@ class field:
     """
 
     field = 0
-    center = 0
-    centerCircleRadius = 0
+    center = 0 # [x, y, radius of center circle]
     ratioPxCm = 0
     angle = 0
     goalCenterLeft = 0
     goalCenterRight = 0
     goalAreaRadius = 0
 
-    def calibrate(self, calibrationImage):
-        self._getCenterScale(calibrationImage)
-        self._getAngle(calibrationImage)
+    def calibrate(self, calibrationImage, verbose=0):
+        calibrationImageHSV = cv2.cvtColor(calibrationImage, cv2.COLOR_RGB2HSV)
+        self._getCenterScale(calibrationImageHSV, verbose)
+        self._getAngle(calibrationImageHSV, verbose)
         self._calcField()
         self._calcGoalArea()
 
@@ -42,7 +42,7 @@ class field:
         :param position: Coordinates of a point
         :return: True if the position is inside the field, False otherwise
         """
-        debugMode = 0
+        verbose = 0
 
         # Field has not been calibrated yet
         if self.field == 0:
@@ -54,7 +54,7 @@ class field:
         if (topLeft[0] <= position[0] <= bottomRight[0] and topLeft[1] <= position[1] <= bottomRight[1]) :
             return True
         else :
-            if debugMode:
+            if verbose:
                 print(str(position) + " is not between" + str(topLeft) + "and " + str(bottomRight))
             return False
 
@@ -64,6 +64,8 @@ class field:
         :param image: The HSV-image to draw on
         :return: The image with the markers drawn
         """
+        imageCopy = image.copy()
+
         if self.field != 0:
             topLeft = self.field[0]
             topRight = self.field[1]
@@ -73,44 +75,42 @@ class field:
             goalCenterLeft = self.goalCenterLeft
 
             # Draw center circle
-            cv2.circle(image, (int(self.center[0]), int(self.center[1])), int(self.center[2]), (0, 255, 0), 1)
+            cv2.circle(imageCopy, (int(self.center[0]), int(self.center[1])), int(self.center[2]), (0, 255, 0), 1)
 
             # Draw the center marker cross
-            x1 = int(round(self.center[0] - image.shape[1]/20, 0))
-            x2 = int(round(self.center[0] + image.shape[1]/20, 0))
-            y1 = int(round(self.center[1] - image.shape[0]/20, 0))
-            y2 = int(round(self.center[1] + image.shape[0]/20, 0))
-            cv2.line(image, (x1, int(self.center[1])), (x2, int(self.center[1])), (0, 255, 255), 2)
-            cv2.line(image, (int(self.center[0]), y1), (int(self.center[0]), y2), (0, 255, 255), 2)
+            x1 = int(round(self.center[0] - imageCopy.shape[1]/20, 0))
+            x2 = int(round(self.center[0] + imageCopy.shape[1]/20, 0))
+            y1 = int(round(self.center[1] - imageCopy.shape[0]/20, 0))
+            y2 = int(round(self.center[1] + imageCopy.shape[0]/20, 0))
+            cv2.line(imageCopy, (x1, int(self.center[1])), (x2, int(self.center[1])), (0, 255, 255), 2)
+            cv2.line(imageCopy, (int(self.center[0]), y1), (int(self.center[0]), y2), (0, 255, 255), 2)
 
             # Draw the field lines
-            cv2.line(image, (topLeft[0], topLeft[1]), (topRight[0], topRight[1]), (120, 255, 255), 2)
-            cv2.line(image, (topRight[0], topRight[1]), (bottomRight[0], bottomRight[1]), (120, 255, 255), 2)
-            cv2.line(image, (bottomRight[0], bottomRight[1]), (bottomLeft[0], bottomLeft[1]), (120, 255, 255), 2)
-            cv2.line(image, (bottomLeft[0], bottomLeft[1]), (topLeft[0], topLeft[1]), (120, 255, 255), 2)
+            cv2.line(imageCopy, (topLeft[0], topLeft[1]), (topRight[0], topRight[1]), (120, 255, 255), 2)
+            cv2.line(imageCopy, (topRight[0], topRight[1]), (bottomRight[0], bottomRight[1]), (120, 255, 255), 2)
+            cv2.line(imageCopy, (bottomRight[0], bottomRight[1]), (bottomLeft[0], bottomLeft[1]), (120, 255, 255), 2)
+            cv2.line(imageCopy, (bottomLeft[0], bottomLeft[1]), (topLeft[0], topLeft[1]), (120, 255, 255), 2)
 
             # Draw the goal areas
-            cv2.circle(image, (goalCenterLeft[0], goalCenterLeft[1]), self.goalAreaRadius, (120, 255, 255), 2)
-            cv2.circle(image, (goalCenterRight[0], goalCenterRight[1]), self.goalAreaRadius, (120, 255, 255), 2)
+            cv2.circle(imageCopy, (goalCenterLeft[0], goalCenterLeft[1]), self.goalAreaRadius, (120, 255, 255), 2)
+            cv2.circle(imageCopy, (goalCenterRight[0], goalCenterRight[1]), self.goalAreaRadius, (120, 255, 255), 2)
 
         else:
             print('Field was not determined!')  # TODO: Interface message or error code in return value
 
-        return image
+        return imageCopy
 
-    def _getCenterScale(self, calibrationImage):
+    def _getCenterScale(self, calibrationImage, verbose=0):
         """
         :param calibrationImage: The HSV-image to use for calculation
         :return: Position of center point in image (tuple), ratio px per cm (reproduction scale)
         """
-        debugMode = 0
-
         # Some preprocessing
         rgb = cv2.cvtColor(calibrationImage, cv2.COLOR_HSV2RGB)
         gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 1)
         thresh = cv2.adaptiveThreshold(blurred,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,3,2)
-        if debugMode:
+        if verbose:
             cv2.imshow("adaptiveThreshold", thresh)
             cv2.waitKey(0)
 
@@ -119,7 +119,6 @@ class field:
 
         # Select the nearest circle to the center of calibrationImage
         centerCircle = (0, 0, 0)
-        count = 0
         minDistance = 0xFFFFFFFFFFF
 
         for circle in circles[0]:
@@ -129,24 +128,24 @@ class field:
                 minDistance = distX + distY
                 centerCircle = circle
                 # Show each candidate circle in red
-                if debugMode:
+                if verbose == 1:
                     cv2.circle(blurred, (int(centerCircle[0]), int(centerCircle[1])), int(centerCircle[2]), (255, 0, 0), 1)
                     cv2.imshow("Center circle", blurred)
-                    cv2.waitKey(0)
 
-        # Draw chosen circle in blue
-        if debugMode:
+        # Draw chosen circle in green
+        if verbose == 1:
             cv2.circle(blurred, (int(centerCircle[0]), int(centerCircle[1])), int(centerCircle[2]), (0, 255, 0), 1)
             cv2.imshow("Center circle", blurred)
-            cv2.waitKey(0)
 
         # Since the diameter of the center circle is fixed at 20.5 cm, we can calculate the ratio of 
         # pixels / cm from the radius of the center circle found.
         radius = centerCircle[2]
-        ratioPxCm = radius / 10 # Normally 10.25 but trying other values for my table
+        ratioPxCm = radius / 8.75 # Normally 10.25 but trying other values for my table
 
         self.center = centerCircle
         self.ratioPxCm = ratioPxCm
+
+        print("Center circle: " + str(centerCircle) + " ratioPxCm: " + str(ratioPxCm))
 
         return [self.center, self.ratioPxCm]
 
@@ -162,15 +161,27 @@ class field:
         den = math.sqrt(y_diff**2 + x_diff**2)
         return num / den
 
-    def _getAngle(self, calibrationImage):
+    def _getAngle(self, calibrationImage, verbose=0):
         """
-
+        Method _getCenterScale has to be called before.
         :param calibrationImage: The HSV-image to use for calculation
         :return: Rotation angle of the field in image
         """
         angle = 0
-        rgb   = cv2.cvtColor(calibrationImage, cv2.COLOR_HSV2BGR)
-        gray  = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+        
+        # The initialization is done with an square of 4x the radius of the center circle at the center of the field.
+        # This way we maximize the chances to detect the center line first.
+        x1 = int(round(self.center[0] - 2*self.center[2], 0))
+        x2 = int(round(self.center[0] + 2*self.center[2], 0))
+        y1 = int(round(self.center[1] - 2*self.center[2], 0))
+        y2 = int(round(self.center[1] + 2*self.center[2], 0))
+        print("(x1,x2): " + str(((x1,x2))) + "(y1,y2): " + str(((y1,y2))))
+        cropped = calibrationImage[y1:y2, x1:x2]
+        cv2.imshow("_getAngle : Center line", cropped)
+        cv2.waitKey(0)
+
+        rgb   = cv2.cvtColor(cropped, cv2.COLOR_HSV2RGB)
+        gray  = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
         edges = cv2.Canny(gray, 50, 150, apertureSize=3)
 
         # Detect lines in image
@@ -195,9 +206,12 @@ class field:
             angle = np.degrees(b)
 
         # Show the frame to our screen
-#        cv2.line(rgb, (x1, y1), (x2, y2), (0, 0, 255), 2)
-#        cv2.imshow("Frame", rgb)
-#        key = cv2.waitKey(0) & 0xFF
+        if verbose == 1:
+            cv2.line(rgb, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            cv2.imshow("_getAngle : Center line", rgb)
+            cv2.imshow("_getAngle : gray", gray)
+            cv2.imshow("_getAngle : edges", edges)
+            print('Detected table angle: ' + str(angle))
 
         self.angle = angle
         return angle

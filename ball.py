@@ -27,16 +27,17 @@ class ball:
     def draw(self, image):
         """
         Draws the ball marker onto the image.
-        :param image: The HSV-image to draw on
+        :param image: The image to draw on
         :return: Image with the marker drawn
         """
+        imageCopy = image.copy()
         if self.curr_ball_position != (-1, -1):
-            cv2.circle(image.copy(), (self.curr_ball_position[0], self.curr_ball_position[1]), 2, (120, 255, 255), 2)
+            cv2.circle(imageCopy, (self.curr_ball_position[0], self.curr_ball_position[1]), self.ball_radius, (0, 255, 255), 1)
         else:
             # TODO : return error or message
             pass
         
-        return image
+        return imageCopy
 
     def calibrateMethod1(self, calibrationImage, ballPosition):
         """
@@ -162,13 +163,13 @@ class ball:
         self.curr_ball_position = (0, 0)
 
         # Get the areas of the image, which have a similar color to the ball color
-        bl_temp=cv2.getTrackbarPos('bl', 'temp')
-        gl_temp=cv2.getTrackbarPos('gl', 'temp')
-        rl_temp=cv2.getTrackbarPos('rl', 'temp')
+        bl_temp=cv2.getTrackbarPos('bl', 'Parameters')
+        gl_temp=cv2.getTrackbarPos('gl', 'Parameters')
+        rl_temp=cv2.getTrackbarPos('rl', 'Parameters')
 
-        bh_temp=cv2.getTrackbarPos('bh', 'temp')
-        gh_temp=cv2.getTrackbarPos('gh', 'temp')
-        rh_temp=cv2.getTrackbarPos('rh', 'temp')
+        bh_temp=cv2.getTrackbarPos('bh', 'Parameters')
+        gh_temp=cv2.getTrackbarPos('gh', 'Parameters')
+        rh_temp=cv2.getTrackbarPos('rh', 'Parameters')
 
         mask=cv2.inRange(img_hsv,(bl_temp,gl_temp,rl_temp),(bh_temp,gh_temp,rh_temp))
         smoothMask = self._smooth_ball_mask(mask)
@@ -354,7 +355,7 @@ class ball:
 
         self._store_ball_position(self.curr_ball_position)
 
-    def findMethod20(self, field, img_hsv, verbose = 0):
+    def findMethod20(self, field, imgRGB, verbose = 0):
         """
         Finds the ball in the image.
         The element with the highest similarity to a circle near ball radius is considered as the ball.
@@ -367,17 +368,18 @@ class ball:
         y_mean = []
         dist = []
         self.curr_ball_position = (0, 0)
+        img_hsv = cv2.cvtColor(imgRGB, cv2.COLOR_RGB2HSV)
 
         # Get the areas of the image, which have a similar color to the ball color
-        Hl=cv2.getTrackbarPos('Hl', 'temp')
-        Sl=cv2.getTrackbarPos('Sl', 'temp')
-        Vl=cv2.getTrackbarPos('Vl', 'temp')
+        Hl=cv2.getTrackbarPos('Hl', 'Parameters')
+        Sl=cv2.getTrackbarPos('Sl', 'Parameters')
+        Vl=cv2.getTrackbarPos('Vl', 'Parameters')
 
-        Hh=cv2.getTrackbarPos('Hh', 'temp')
-        Sh=cv2.getTrackbarPos('Sh', 'temp')
-        Vh=cv2.getTrackbarPos('Vh', 'temp')
+        Hh=cv2.getTrackbarPos('Hh', 'Parameters')
+        Sh=cv2.getTrackbarPos('Sh', 'Parameters')
+        Vh=cv2.getTrackbarPos('Vh', 'Parameters')
 
-        ballRadiusTolerance = 0.25 * cv2.getTrackbarPos('Radius', 'temp')
+        ballRadiusTolerance = 0.25 * cv2.getTrackbarPos('Radius', 'Parameters')
 
         mask=cv2.inRange(img_hsv,(Hl,Sl,Vl),(Hh,Sh,Vh))
         smoothMask = self._smooth_ball_mask(mask)
@@ -397,7 +399,6 @@ class ball:
                 ((x, y), radius) = cv2.minEnclosingCircle(contour)
                 if self.ball_radius * ballRadiusTolerance <= radius <= self.ball_radius * (ballRadiusTolerance + 1) and field.inField((int(x), int(y))):
                     # print("Found ball in field")
-                    cv2.circle(img_hsv, (int(x), int(y)), int(radius), (0,255,255), 1)
                     # Criterias : 
                     # - Radius similar to expected - min(radius_expected - radius_observed)
                     # - Closeness to circle shape - min(self._check_circle(contour)) --- not used for now
@@ -414,7 +415,6 @@ class ball:
 
         if verbose:
             print(str(len(dist)) + " candidate balls detected in image. Coordinates of choosen as the ball: " + str(self.curr_ball_position))
-            cv2.imshow("img_hsv", cv2.cvtColor(img_hsv, cv2.COLOR_HSV2RGB))
             cv2.imshow("mask", mask)
             cv2.imshow("smoothMask", smoothMask)
 
@@ -562,7 +562,7 @@ class ball:
         :return: True if contour resembles a circle, false otherwise
         """
 
-        circleMatchingThreshold = 0.1 * cv2.getTrackbarPos('Circle', 'temp')
+        circleMatchingThreshold = 0.1 * cv2.getTrackbarPos('Circle', 'Parameters')
 
 #        if self._check_circle(points) <= self.ball_detection_threshold:
         if self._check_circle(points) <= circleMatchingThreshold:
